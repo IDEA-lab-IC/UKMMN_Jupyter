@@ -96,8 +96,13 @@ def setup_topology(nelx, nely, rmin, Emin, Emax, nu, penal, volfrac):
         'ce': ce, 'dc': dc, 'dv': dv,}
     return state
 
-def setup_topology_stress(nelx, nely, rmin, Emin, Emax, nu, penal, volfrac, sigma_max=0.3, p_norm=8):
-    # Element stiffness (plane stress 8x8) using k-matrix
+def setup_topology_stress(nelx, nely, rmin, Emin, Emax, nu, penal, volfrac, sigma_limit, p_norm):
+    """
+    Initialise topology optimisation state for stress-constrained design.
+    Stress is normalised by sigma_yield=1.0.
+    Constraint limit is sigma_limit.
+    """
+    # Element stiffness (plane stress 8x8)
     k = np.array([1/2 - nu/6, 1/8 + nu/8, -1/4 - nu/12, -1/8 + 3*nu/8,
                   -1/4 + nu/12, -1/8 - nu/8, nu/6, 1/8 - 3*nu/8])
     KE = 1/(1 - nu**2) * np.array([
@@ -108,8 +113,7 @@ def setup_topology_stress(nelx, nely, rmin, Emin, Emax, nu, penal, volfrac, sigm
         [k[4], k[5], k[6], k[7], k[0], k[1], k[2], k[3]],
         [k[5], k[4], k[3], k[2], k[1], k[0], k[7], k[6]],
         [k[6], k[3], k[4], k[1], k[2], k[7], k[0], k[5]],
-        [k[7], k[2], k[1], k[4], k[3], k[6], k[5], k[0]]
-    ])
+        [k[7], k[2], k[1], k[4], k[3], k[6], k[5], k[0]]])
 
     ndof = 2*(nelx+1)*(nely+1)
 
@@ -132,12 +136,12 @@ def setup_topology_stress(nelx, nely, rmin, Emin, Emax, nu, penal, volfrac, sigm
     fixed = np.union1d(dofs[0:2*(nely+1):2], np.array([2*(nelx+1)*(nely+1)-1]))
     free = np.setdiff1d(dofs, fixed)
 
-    # Load vector & displacement vector
+    # Load and displacement vectors
     f = np.zeros((ndof,1))
     u = np.zeros((ndof,1))
     f[1,0] = -1
 
-    # Filter (for sensitivities)
+    # Sensitivity filter
     nfilter = int(nelx*nely*((2*(np.ceil(rmin)-1)+1)**2))
     iH = np.zeros(nfilter)
     jH = np.zeros(nfilter)
@@ -166,7 +170,6 @@ def setup_topology_stress(nelx, nely, rmin, Emin, Emax, nu, penal, volfrac, sigm
     xold = x.copy()
     xPhys = x.copy()
 
-    # Bookkeeping
     ce = np.zeros(nelx*nely)
     dc = np.zeros(nelx*nely)
     dv = np.ones(nelx*nely)
@@ -187,7 +190,10 @@ def setup_topology_stress(nelx, nely, rmin, Emin, Emax, nu, penal, volfrac, sigm
         'p_stress': 0.0,
         'c2': 0.0,
         'dc2': np.zeros(nelx*nely),
-        'sigma_max': sigma_max,
-        'p_norm': p_norm
-    }
+        'sigma_yield': 1.0,      # normalisation for von Mises
+        'sigma_limit': sigma_limit, # 0.3 or desired constraint
+        'p_norm': p_norm,
+        'lambda_s': 0.0,
+        'mu_s': 10.0,
+        'max_mu': 1e6,}
     return state
